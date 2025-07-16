@@ -31,7 +31,6 @@ main()
     userinit();      // first user process
     __sync_synchronize();
     print_ascii_art();
-    printf("Welcome to xv6!\n");
     started = 1;
   } else {
     while(started == 0)
@@ -42,6 +41,5 @@ main()
     trapinithart();   // install kernel trap vector
     plicinithart();   // ask PLIC for device interrupts
   }
-  // wait for the first CPU to finish initializing
-  scheduler();        
+  scheduler();
 }
