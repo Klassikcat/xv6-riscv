@@ -22,6 +22,9 @@ void            consoleinit(void);
 void            consoleintr(int);
 void            consputc(int);
 
+// ascii.c
+void            print_ascii_art(void);
+
 // exec.c
 int             exec(char*, char**);
 

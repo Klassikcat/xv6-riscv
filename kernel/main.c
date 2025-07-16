@@ -39,6 +39,7 @@ main()
     kvminithart();    // turn on paging
     trapinithart();   // install kernel trap vector
     plicinithart();   // ask PLIC for device interrupts
+    print_ascii_art();  // display ASCII art
   }
 
   scheduler();        
