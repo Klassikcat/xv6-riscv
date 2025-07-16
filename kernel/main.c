@@ -30,6 +30,8 @@ main()
     virtio_disk_init(); // emulated hard disk
     userinit();      // first user process
     __sync_synchronize();
+    print_ascii_art();
+    printf("Welcome to xv6!\n");
     started = 1;
   } else {
     while(started == 0)
@@ -39,8 +41,7 @@ main()
     kvminithart();    // turn on paging
     trapinithart();   // install kernel trap vector
     plicinithart();   // ask PLIC for device interrupts
-    print_ascii_art();  // display ASCII art
   }
-
+  // wait for the first CPU to finish initializing
   scheduler();        
 }
