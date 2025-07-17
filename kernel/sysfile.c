@@ -16,6 +16,9 @@
 #include "file.h"
 #include "fcntl.h"
 
+struct sleeplock read_lock;
+int read_count = 0;
+
 // Fetch the nth word-sized system call argument as a file descriptor
 // and return both the descriptor and the corresponding struct file.
 static int
@@ -74,6 +77,11 @@ sys_read(void)
 
   argaddr(1, &p);
   argint(2, &n);
+  
+  acquiresleep(&read_lock);
+  read_count++;
+  releasesleep(&read_lock);
+
   if(argfd(0, 0, &f) < 0)
     return -1;
   return fileread(f, p, n);
@@ -502,4 +510,12 @@ sys_pipe(void)
     return -1;
   }
   return 0;
+}
+
+int
+sys_getreadcount(void) {
+  acquiresleep(&read_lock);
+  int outputs = read_count;
+  releasesleep(&read_lock);
+  return outputs;
 }
