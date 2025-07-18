@@ -5,7 +5,6 @@
 #include "defs.h"
 
 volatile static int started = 0;
-extern struct spinlock read_lock;
 
 // start() jumps here in supervisor mode on all CPUs.
 void
@@ -28,7 +27,6 @@ main()
     binit();         // buffer cache
     iinit();         // inode table
     fileinit();      // file table
-    initlock(&read_lock, "read_count");
     virtio_disk_init(); // emulated hard disk
     userinit();      // first user process
     __sync_synchronize();
