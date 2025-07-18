@@ -135,7 +135,7 @@ UPROGS=\
 	$U/_ln\
 	$U/_ls\
 	$U/_mkdir\
-	$U/_read_count\
+	$U/_get_read_count\
 	$U/_rm\
 	$U/_sh\
 	$U/_stressfs\
