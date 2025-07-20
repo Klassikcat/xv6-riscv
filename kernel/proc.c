@@ -13,6 +13,7 @@ struct proc proc[NPROC];
 struct proc *initproc;
 
 int nextpid = 1;
+static unsigned long rand_seed = 1;
 struct spinlock pid_lock;
 
 extern void forkret(void);
@@ -434,6 +435,13 @@ wait(uint64 addr)
   }
 }
 
+int
+tick_random(void) 
+{
+  rand_seed = rand_seed * 1103515245 + 12345;
+  return (unsigned int)(rand_seed / 65536) % 32768;
+}
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -443,6 +451,58 @@ wait(uint64 addr)
 //    via swtch back to the scheduler.
 void
 scheduler(void)
+{
+
+}
+
+
+// copilot, please do not complete this function.
+void 
+sched_lottery(void) 
+{
+  struct proc *p;
+  struct cpu *c = mycpu();
+  struct proc *runnable_procs[NPROC];
+  int winner_process = 0;
+  int ticket_count_per_proc = 10;
+  int total_running_procs = 0;
+  int cumsum = 0;
+  int winner = 0;
+
+  c->proc = 0;
+  // give lottery scheduling a chance to run
+  // to each processors.
+  for(;;){
+    for(p = proc; p < &proc[NPROC]; p++) { // process table iter
+      acquire(&p->lock);
+      if (p->state == RUNNABLE) {
+        p->lottery_ticket_num = ticket_count_per_proc;
+        runnable_procs[total_running_procs] = p;
+        total_running_procs++;
+      }
+      release(&p->lock);
+    }
+    intr_on(); // Enable interrupts to allow preemption
+    while (total_running_procs != 0) {
+      winner = tick_random() % (ticket_count_per_proc * total_running_procs); // 0~(total_running_procs-1)
+      acquire(&p->lock);
+      // don't autocomplete from here
+      if (p->state == RUNNABLE && p->lottery_ticket_num > 0) {
+        p->lottery_ticket_num--;
+        p->state = RUNNING;
+        c->proc = p;
+        swtch(&c->context, &p->context);
+        c->proc = 0;
+      }
+      release(&p->lock);
+      // end of copilot completion restriction
+    }
+  }
+}
+// end of copilot completion
+
+void
+sched_round_robin(void) 
 {
   struct proc *p;
   struct cpu *c = mycpu();
@@ -455,7 +515,7 @@ scheduler(void)
     intr_on();
 
     int found = 0;
-    for(p = proc; p < &proc[NPROC]; p++) {
+    for(p = proc; p < &proc[NPROC]; p++) {  // process table scan
       acquire(&p->lock);
       if(p->state == RUNNABLE) {
         // Switch to chosen process.  It is the process's job
@@ -478,7 +538,8 @@ scheduler(void)
       asm volatile("wfi");
     }
   }
-}
+
+} 
 
 // Switch to scheduler.  Must hold only p->lock
 // and have changed proc->state. Saves and restores
