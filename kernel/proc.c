@@ -13,7 +13,6 @@ struct proc proc[NPROC];
 struct proc *initproc;
 
 int nextpid = 1;
-static unsigned long rand_seed = 1;
 struct spinlock pid_lock;
 
 extern void forkret(void);
@@ -125,6 +124,7 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
+  p->lottery_ticket_num = 10;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -438,8 +438,15 @@ wait(uint64 addr)
 int
 tick_random(void) 
 {
-  rand_seed = rand_seed * 1103515245 + 12345;
-  return (unsigned int)(rand_seed / 65536) % 32768;
+  struct cpu *c = mycpu();
+  
+  // Initialize seed if not already done
+  if (c->rand_seed == 0) {
+    c->rand_seed = cpuid() * 1664525 + ticks + 1;
+  }
+  
+  c->rand_seed = c->rand_seed * 1103515245 + 12345;
+  return (unsigned int)(c->rand_seed / 65536) % 32768;
 }
 
 // Per-CPU process scheduler.
@@ -449,97 +456,67 @@ tick_random(void)
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
+
+// Copilot completion restriction:
+// This function should not be modified by Copilot. 
+
 void
 scheduler(void)
-{
-
-}
-
-
-// copilot, please do not complete this function.
-void 
-sched_lottery(void) 
 {
   struct proc *p;
   struct cpu *c = mycpu();
   struct proc *runnable_procs[NPROC];
-  int winner_process = 0;
-  int ticket_count_per_proc = 10;
-  int total_running_procs = 0;
-  int cumsum = 0;
-  int winner = 0;
+  int total_running_procs;
+  int total_ticket_num;
+  int cumsum;
+  int winner_ticket;
+  struct proc *w;
 
   c->proc = 0;
   // give lottery scheduling a chance to run
   // to each processors.
   for(;;){
+    intr_on(); // Enable interrupts to allow preemption
+    total_running_procs = 0;
+    total_ticket_num = 0;
     for(p = proc; p < &proc[NPROC]; p++) { // process table iter
       acquire(&p->lock);
       if (p->state == RUNNABLE) {
-        p->lottery_ticket_num = ticket_count_per_proc;
         runnable_procs[total_running_procs] = p;
         total_running_procs++;
+        total_ticket_num += p->lottery_ticket_num;
       }
       release(&p->lock);
     }
-    intr_on(); // Enable interrupts to allow preemption
-    while (total_running_procs != 0) {
-      winner = tick_random() % (ticket_count_per_proc * total_running_procs); // 0~(total_running_procs-1)
-      acquire(&p->lock);
-      // don't autocomplete from here
-      if (p->state == RUNNABLE && p->lottery_ticket_num > 0) {
-        p->lottery_ticket_num--;
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-        c->proc = 0;
-      }
-      release(&p->lock);
-      // end of copilot completion restriction
-    }
-  }
-}
-// end of copilot completion
-
-void
-sched_round_robin(void) 
-{
-  struct proc *p;
-  struct cpu *c = mycpu();
-
-  c->proc = 0;
-  for(;;){
-    // The most recent process to run may have had interrupts
-    // turned off; enable them to avoid a deadlock if all
-    // processes are waiting.
-    intr_on();
-
-    int found = 0;
-    for(p = proc; p < &proc[NPROC]; p++) {  // process table scan
-      acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
-      }
-      release(&p->lock);
-    }
-    if(found == 0) {
-      // nothing to run; stop running on this core until an interrupt.
+    if (total_running_procs == 0 || total_ticket_num == 0) {
       intr_on();
       asm volatile("wfi");
+      continue;
     }
+    winner_ticket = tick_random() % total_ticket_num; // 0~(total_ticket_num-1)
+    cumsum = 0;
+    w = 0;
+    for(int i = 0; i < total_running_procs; i++) {
+      cumsum += runnable_procs[i]->lottery_ticket_num;
+      if (winner_ticket <= cumsum) {
+        w = runnable_procs[i];
+        break;
+      }
+    }
+    if (w == 0) {
+      continue;
+    }
+    acquire(&w->lock);
+    if (w->state == RUNNABLE) {
+      w->state = RUNNING;
+      c->proc = w;
+      swtch(&c->context, &w->context);
+      c->proc = 0;
+    }
+    release(&w->lock);
   }
-
-} 
+}
+// end of copilot completion restriction
 
 // Switch to scheduler.  Must hold only p->lock
 // and have changed proc->state. Saves and restores
