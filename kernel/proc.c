@@ -494,7 +494,7 @@ scheduler(void)
       continue;
     }
     winner_ticket = tick_random() % total_ticket_num; // 0~(total_ticket_num-1)
-    cumsum = -1;
+    cumsum = 0;
     w = 0;
     for(int i = 0; i < total_running_procs; i++) {
       cumsum += runnable_procs[i]->lottery_ticket_num;
