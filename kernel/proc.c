@@ -25,7 +25,6 @@ extern char trampoline[]; // trampoline.S
 // memory model when using p->parent.
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
-struct spinlock scheduler_global_lock;
 
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
@@ -52,7 +51,6 @@ procinit(void)
   
   initlock(&pid_lock, "nextpid");
   initlock(&wait_lock, "wait_lock");
-  initlock(&scheduler_global_lock, "scheduler");
   for(p = proc; p < &proc[NPROC]; p++) {
       initlock(&p->lock, "proc");
       p->state = UNUSED;
@@ -126,7 +124,6 @@ allocproc(void)
 found:
   p->pid = allocpid();
   p->state = USED;
-  p->lottery_ticket_num = 10;
 
   // Allocate a trapframe page.
   if((p->trapframe = (struct trapframe *)kalloc()) == 0){
@@ -468,40 +465,38 @@ scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
   struct proc *runnable_procs[NPROC];
-  int total_running_procs;
   int total_ticket_num;
   int cumsum;
   int winner_ticket;
-  struct proc *w;
 
   c->proc = 0;
   // give lottery scheduling a chance to run
   // to each processors.
   for(;;){
     intr_on(); // Enable interrupts to allow preemption
-    acquire(&scheduler_global_lock);
-    total_running_procs = 0;
+    int total_running_procs = 0;
     total_ticket_num = 0;
+    int lottery_tickets_per_proc = 10; // TODO: configure this value in process launch(proc) with different values.
     for(p = proc; p < &proc[NPROC]; p++) { // process table iter
       acquire(&p->lock);
       if (p->state == RUNNABLE) {
         runnable_procs[total_running_procs] = p;
         total_running_procs++;
-        total_ticket_num += p->lottery_ticket_num;
+        total_ticket_num += lottery_tickets_per_proc; // PR #3 
       }
       release(&p->lock);
     }
     if (total_running_procs == 0 || total_ticket_num == 0) {
-      release(&scheduler_global_lock);
       intr_on();
       asm volatile("wfi");
       continue;
     }
     winner_ticket = tick_random() % total_ticket_num; // 0~(total_ticket_num-1)
     cumsum = 0;
+    struct proc *w;
     w = 0;
     for(int i = 0; i < total_running_procs; i++) {
-      cumsum += runnable_procs[i]->lottery_ticket_num;
+      cumsum += lottery_tickets_per_proc;
       if (winner_ticket < cumsum) {
         w = runnable_procs[i];
         break;
@@ -509,13 +504,11 @@ scheduler(void)
     }
     acquire(&w->lock);
     if (w->state != RUNNABLE) {
-      release(&scheduler_global_lock);
       release(&w->lock);
       continue;
     }
     w->state = RUNNING;
     c->proc = w;
-    release(&scheduler_global_lock);
     swtch(&c->context, &w->context);
     c->proc = 0;
     release(&w->lock);
