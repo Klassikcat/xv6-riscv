@@ -24,7 +24,7 @@ struct cpu {
   struct context context;     // swtch() here to enter scheduler().
   int noff;                   // Depth of push_off() nesting.
   int intena;                 // Were interrupts enabled before push_off()?
-  unsigned int rand_seed;     // Random seed for lottery scheduling.
+  unsigned int rand_state;    // Random state for lottery scheduling. seed is value for random function.
 };
 
 extern struct cpu cpus[NCPU];
