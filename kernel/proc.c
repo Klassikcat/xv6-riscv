@@ -23,13 +23,13 @@ extern char trampoline[]; // trampoline.S
 // Copilot Completion Guideline:
 // You should not modify most of functions unless it has syntax errors.
 
-// helps ensure that wakeups of wait()ing
+// helps ensure that wakeups of waiting
 // parents are not lost. helps obey the
 // memory model when using p->parent.
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
 
-uint64
+int
 sys_getpinfo(void) {
   struct pstat pstat;
   struct proc *p;
@@ -296,6 +296,7 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
+  p->lottery_tickets = 10;
 
   release(&p->lock);
 }
@@ -366,6 +367,8 @@ fork(void)
 
   acquire(&np->lock);
   np->state = RUNNABLE;
+  np->lottery_tickets = p->lottery_tickets;
+  np->times_executed = 0;
   release(&np->lock);
 
   return pid;
@@ -517,7 +520,6 @@ scheduler(void)
 
   c->proc = 0;
   cumsum = 0;
-  int lottery_tickets = 10;
   struct proc *w;
   // give lottery scheduling a chance to run
   // to each processors.
@@ -527,7 +529,6 @@ scheduler(void)
     total_ticket_num = 0;
     for(p = proc; p < &proc[NPROC]; p++) { // process table iter
       acquire(&p->lock);
-      p->lottery_tickets = lottery_tickets; // TODO: Remove this
       if (p->state == RUNNABLE) {
         runnable_procs[total_running_procs] = p;
         total_running_procs++;
@@ -555,6 +556,7 @@ scheduler(void)
       continue;
     }
     w->state = RUNNING;
+    w->times_executed++;
     c->proc = w;
     swtch(&c->context, &w->context);
     c->proc = 0;
