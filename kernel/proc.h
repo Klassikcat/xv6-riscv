@@ -105,4 +105,15 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  
+  // lottery tickets for lottery scheduling
+  int lottery_tickets;         // Number of tickets for lottery scheduling
+  
 };
+
+struct pstat {
+  int inuse[NPROC];   // whether this slot of the process table is in use (1 or 0)
+  int lottery_tickets[NPROC]; // the number of tickets this process has
+  int pid[NPROC];     // the PID of each process 
+};
+

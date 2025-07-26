@@ -20,15 +20,61 @@ static void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
 
+// Copilot Completion Guideline:
+// You should not modify most of functions unless it has syntax errors.
+
 // helps ensure that wakeups of wait()ing
 // parents are not lost. helps obey the
 // memory model when using p->parent.
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
 
+uint64
+sys_getpinfo(void) {
+  struct pstat pstat;
+  struct proc *p;
+  uint64 addr;
+
+  argaddr(0, &addr);
+  if (addr == 0) {
+    return -1;
+  }
+
+  int i = 0;
+  for(p = proc; p < &proc[NPROC]; p++) { // process table iter
+    acquire(&p->lock);
+    pstat.inuse[i] = (p->state != UNUSED);
+    pstat.lottery_tickets[i] = p->lottery_tickets;
+    pstat.pid[i] = p->pid;
+    release(&p->lock);
+    i++;
+  }
+
+  if (copyout(myproc()->pagetable, addr, (char *)&pstat, sizeof(pstat)) < 0) {
+    return -1;
+  }
+  
+  return 0;
+}
+
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
 // guard page.
+
+int
+settickets(int number) {
+  struct proc *p = myproc();
+  acquire(&p->lock);
+  if (number > 0) {
+    p->lottery_tickets = number;
+    release(&p->lock);
+  } else {
+    release(&p->lock);
+    return -1;
+  }
+  return 0;
+}
+
 void
 proc_mapstacks(pagetable_t kpgtbl)
 {
@@ -434,18 +480,18 @@ wait(uint64 addr)
   }
 }
 
-int
+int static
 tick_random(void) 
 {
   struct cpu *c = mycpu();
   
   // Initialize seed if not already done
-  if (c->rand_seed == 0) {
-    c->rand_seed = cpuid() * 1664525 + ticks + 1;
+  if (c->rand_state == 0) {
+    c->rand_state = cpuid() * 1664525 + ticks + 1;
   }
   
-  c->rand_seed = c->rand_seed * 1103515245 + 12345;
-  return (unsigned int)(c->rand_seed / 65536) % 32768;
+  c->rand_state = c->rand_state * 1103515245 + 12345;
+  return (unsigned int)(c->rand_state / 65536) % 32768;
 }
 
 // Per-CPU process scheduler.
@@ -470,19 +516,22 @@ scheduler(void)
   int winner_ticket;
 
   c->proc = 0;
+  cumsum = 0;
+  int lottery_tickets = 10;
+  struct proc *w;
   // give lottery scheduling a chance to run
   // to each processors.
   for(;;){
     intr_on(); // Enable interrupts to allow preemption
     int total_running_procs = 0;
     total_ticket_num = 0;
-    int lottery_tickets_per_proc = 10; // TODO: configure this value in process launch(proc) with different values.
     for(p = proc; p < &proc[NPROC]; p++) { // process table iter
       acquire(&p->lock);
+      p->lottery_tickets = lottery_tickets; // TODO: Remove this
       if (p->state == RUNNABLE) {
         runnable_procs[total_running_procs] = p;
         total_running_procs++;
-        total_ticket_num += lottery_tickets_per_proc; // PR #3 
+        total_ticket_num += p->lottery_tickets; // PR #3
       }
       release(&p->lock);
     }
@@ -492,11 +541,9 @@ scheduler(void)
       continue;
     }
     winner_ticket = tick_random() % total_ticket_num; // 0~(total_ticket_num-1)
-    cumsum = 0;
-    struct proc *w;
     w = 0;
     for(int i = 0; i < total_running_procs; i++) {
-      cumsum += lottery_tickets_per_proc;
+      cumsum += runnable_procs[i]->lottery_tickets;
       if (winner_ticket < cumsum) {
         w = runnable_procs[i];
         break;
