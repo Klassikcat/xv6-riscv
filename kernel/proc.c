@@ -484,15 +484,23 @@ wait(uint64 addr)
 }
 
 int static
-tick_random(void) 
+init_random(void)
 {
   struct cpu *c = mycpu();
-  
+
   // Initialize seed if not already done
   if (c->rand_state == 0) {
     c->rand_state = cpuid() * 1664525 + ticks + 1;
   }
-  
+  return 0;
+
+}
+
+
+int static
+get_random(void)
+{
+  struct cpu *c = mycpu();
   c->rand_state = c->rand_state * 1103515245 + 12345;
   return (unsigned int)(c->rand_state / 65536) % 32768;
 }
@@ -508,6 +516,11 @@ tick_random(void)
 // Copilot completion restriction:
 // This function should not be modified by Copilot. 
 
+int static
+uniformalize_distribution(int x) {
+  
+}
+
 void
 scheduler(void)
 {
@@ -520,6 +533,7 @@ scheduler(void)
 
   c->proc = 0;
   cumsum = 0;
+  init_random();
   struct proc *w;
   // give lottery scheduling a chance to run
   // to each processors.
@@ -541,7 +555,7 @@ scheduler(void)
       asm volatile("wfi");
       continue;
     }
-    winner_ticket = tick_random() % total_ticket_num; // 0~(total_ticket_num-1)
+    winner_ticket = get_random() % total_ticket_num; // 0~(total_ticket_num-1)
     w = 0;
     for(int i = 0; i < total_running_procs; i++) {
       cumsum += runnable_procs[i]->lottery_tickets;
