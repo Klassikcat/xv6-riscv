@@ -13,8 +13,8 @@ main(void)
       fprintf(2, "fork failed\n");
       exit(1);
     } else if (pid == 0) {
-      char *argv[] = { "cpu-test", 0 };
-      exec("cpu-test", argv);
+      char *argv[] = { "cpu-t", 0 };
+      exec("cpu-t", argv);
       fprintf(2, "exec failed\n");
       exit(1);
     }
