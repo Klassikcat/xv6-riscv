@@ -516,9 +516,10 @@ get_random(void)
 // Copilot completion restriction:
 // This function should not be modified by Copilot. 
 
-int static
-uniformalize_distribution(int x) {
-  
+static uint32
+nominate_winner(int random_value, int total_tickets, int magic_number)
+{
+  return random_value * magic_number * total_tickets;
 }
 
 void
