@@ -516,12 +516,6 @@ get_random(void)
 // Copilot completion restriction:
 // This function should not be modified by Copilot. 
 
-static uint32
-nominate_winner(int random_value, int total_tickets, int magic_number)
-{
-  return random_value * magic_number * total_tickets;
-}
-
 void
 scheduler(void)
 {
@@ -556,7 +550,7 @@ scheduler(void)
       asm volatile("wfi");
       continue;
     }
-    winner_ticket = get_random() % total_ticket_num; // 0~(total_ticket_num-1)
+    winner_ticket = ((uint64)get_random() * total_ticket_num) >> 15; // output of get_random() is 15-bit int
     w = 0;
     for(int i = 0; i < total_running_procs; i++) {
       cumsum += runnable_procs[i]->lottery_tickets;
