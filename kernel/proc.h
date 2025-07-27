@@ -108,7 +108,7 @@ struct proc {
   
   // lottery tickets for lottery scheduling
   int lottery_tickets;         // Number of tickets for lottery scheduling
-  uint64 times_executed;
+  unsigned int times_executed;
 };
 
 struct pstat {
