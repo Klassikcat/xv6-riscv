@@ -47,6 +47,7 @@ sys_getpinfo(void) {
     pstat.inuse[i] = (p->state != UNUSED);
     pstat.lottery_tickets[i] = p->lottery_tickets;
     pstat.pid[i] = p->pid;
+    pstat.times_executed[i] = p->times_executed;
     release(&p->lock);
     i++;
   }

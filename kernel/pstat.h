@@ -1,3 +1,6 @@
+#ifndef NPROC
+#define NPROC 64 
+#endif
 
 struct pstat {
   int inuse[NPROC];   // whether this slot of the process table is in use (1 or 0)
