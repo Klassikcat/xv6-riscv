@@ -146,6 +146,7 @@ UPROGS=\
 	$U/_cpu-t\
 	$U/_multproc-t\
 	$U/_getpinfo\
+	$U/_scheduler-test\
 
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)

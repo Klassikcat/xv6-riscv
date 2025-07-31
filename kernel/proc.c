@@ -78,6 +78,15 @@ settickets(int number) {
 }
 
 void
+sys_settickets(void) {
+  int number;
+  argint(0, &number);
+  if (settickets(number) < 0) {
+    printf("Error: Invalid number of tickets.\n");
+  }
+}
+
+void
 proc_mapstacks(pagetable_t kpgtbl)
 {
   struct proc *p;
