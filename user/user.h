@@ -1,6 +1,6 @@
-#include "kernel/pstat.h"
-
 struct stat;
+int settickets(int);
+struct pstat;
 
 // system calls
 int fork(void);
