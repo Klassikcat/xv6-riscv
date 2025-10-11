@@ -576,9 +576,9 @@ scheduler(void)
       continue;
     }
     w->state = RUNNING;
-    w->times_executed++;
     c->proc = w;
     swtch(&c->context, &w->context);
+    w->times_executed++;
     c->proc = 0;
     release(&w->lock);
   }
