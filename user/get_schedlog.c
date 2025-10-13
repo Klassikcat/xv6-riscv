@@ -6,16 +6,6 @@
 #define SLEEP_TIME 300
 #define INTERVAL 10
 
-static int
-get_total_tickets(int tickets[])
-{
-  int total = 0;
-  for (int i = 0; i < NUM_PROCS; i++) {
-    total += tickets[i];
-  }
-  return total;
-}
-
 static void 
 get_schedule_log(int pid) 
 {
@@ -81,7 +71,6 @@ int
 main() {
   int tickets[NUM_PROCS] = {30, 20, 10};
   int* pids = dispatch_procs(NUM_PROCS, tickets);
-  get_total_tickets(tickets);
 
   sleep(INTERVAL);
   interval_logger(pids);
