@@ -538,7 +538,6 @@ scheduler(void)
   int winner_ticket;
 
   c->proc = 0;
-  cumsum = 0;
   init_random();
   struct proc *w;
   // give lottery scheduling a chance to run
@@ -547,6 +546,7 @@ scheduler(void)
     intr_on(); // Enable interrupts to allow preemption
     int total_running_procs = 0;
     total_ticket_num = 0;
+    cumsum = 0;
     for(p = proc; p < &proc[NPROC]; p++) { // process table iter
       acquire(&p->lock);
       if (p->state == RUNNABLE) {
