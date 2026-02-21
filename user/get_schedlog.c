@@ -6,6 +6,10 @@
 #define SLEEP_TIME 300
 #define INTERVAL 10
 
+// TODO: Implement the final output printing
+// using integer outputs
+// e.g. "f{n / m}.{n mod n}"
+
 static void 
 get_schedule_log(int pid) 
 {
@@ -31,18 +35,23 @@ dispatch_procs(int num_procs, int* tickets)
   for (int i = 0; i < NUM_PROCS; i++) {
     int pid = fork();
     if (pid < 0) {
-        printf("fork failed\n");
-        exit(1);
+      printf("fork failed\n");
+      exit(1);
     } else if (pid == 0) {
-        settickets(tickets[i]);
-        char nbuf[4], sleepbuf[4];
-        uint n = 40;
-        itoa(nbuf, n);
-        itoa(sleepbuf, SLEEP_TIME);
-        char *argv[] = {"fib", nbuf, sleepbuf, 0};
-        printf("Executed fib_infinite pid=%d with n=%d and sleep=%d\n", getpid(), n, SLEEP_TIME);
-        exec("fib_infinite", argv);
-        exit(0);
+      settickets(tickets[i]);
+      char nbuf[4], sleepbuf[4];
+      uint n = 40;
+      itoa(nbuf, n);
+      itoa(sleepbuf, SLEEP_TIME);
+      char *argv[] = {"fib", nbuf, sleepbuf, 0};
+      printf(
+        "Executed fib_infinite pid=%d with n=%d and sleep=%d\n", 
+        getpid(), 
+        n, 
+        SLEEP_TIME
+      );
+      exec("fib_infinite", argv);
+      exit(0);
     } else {
         // Parent process
         pids[i] = pid;
