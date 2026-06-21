@@ -3,9 +3,9 @@
 #include "user/user.h"
 
 
-void
+int
 main(void) {
-  long a = 0;
+  uint64 a = 0;
   for(long i=0; i<1000000000L; i++) { a += i*i; }
-  printf("done!");
+  printf("done! %lu\n", a);
 }

@@ -29,8 +29,10 @@ extern char trampoline[]; // trampoline.S
 // memory model when using p->parent.
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
+#define MAX_LOTTERY_TICKETS (0xffffffffU / NPROC)
 
-int
+
+uint64
 sys_getpinfo(void) {
   struct pstat pstat;
   struct proc *p;
@@ -67,13 +69,12 @@ int
 settickets(int number) {
   struct proc *p = myproc();
   acquire(&p->lock);
-  if (number > 0) {
-    p->lottery_tickets = number;
-    release(&p->lock);
-  } else {
+  if (number <= 0 || number > MAX_LOTTERY_TICKETS) {
     release(&p->lock);
     return -1;
   }
+  p->lottery_tickets = number;
+  release(&p->lock);
   return 0;
 }
 
@@ -494,7 +495,7 @@ wait(uint64 addr)
   }
 }
 
-int static
+static int
 init_random(void)
 {
   struct cpu *c = mycpu();
@@ -508,12 +509,22 @@ init_random(void)
 }
 
 
-int static
+static uint
 get_random(void)
 {
   struct cpu *c = mycpu();
-  c->rand_state = c->rand_state * 1103515245 + 12345;
-  return (unsigned int)(c->rand_state / 65536) % 32768;
+  uint x;
+
+  c->rand_state += 0x9e3779b9U;
+  x = c->rand_state;
+
+  x ^= x >> 16;
+  x *= 0x7feb352dU;
+  x ^= x >> 15; 
+  x *= 0x846ca68bU;
+  x ^= x >> 16;
+
+  return x;
 }
 
 // Per-CPU process scheduler.
@@ -533,9 +544,6 @@ scheduler(void)
   struct proc *p;
   struct cpu *c = mycpu();
   struct proc *runnable_procs[NPROC];
-  int total_ticket_num;
-  int cumsum;
-  int winner_ticket;
 
   c->proc = 0;
   init_random();
@@ -545,7 +553,9 @@ scheduler(void)
   for(;;){
     intr_on(); // Enable interrupts to allow preemption
     int total_running_procs = 0;
+    uint total_ticket_num;
     total_ticket_num = 0;
+    uint cumsum;
     cumsum = 0;
     for(p = proc; p < &proc[NPROC]; p++) { // process table iter
       acquire(&p->lock);
@@ -561,7 +571,8 @@ scheduler(void)
       asm volatile("wfi");
       continue;
     }
-    winner_ticket = ((uint64)get_random() * total_ticket_num) >> 15; // output of get_random() is 15-bit int
+    uint winner_ticket;
+    winner_ticket = ((uint64)get_random() * total_ticket_num) >> 32;
     w = 0;
     for(int i = 0; i < total_running_procs; i++) {
       cumsum += runnable_procs[i]->lottery_tickets;
@@ -569,6 +580,9 @@ scheduler(void)
         w = runnable_procs[i];
         break;
       }
+    }
+    if (w == 0) {
+      continue; // TODO: convert to 2nd pass iteration
     }
     acquire(&w->lock);
     if (w->state != RUNNABLE) {
