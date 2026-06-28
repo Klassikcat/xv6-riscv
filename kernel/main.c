@@ -30,7 +30,7 @@ main()
     virtio_disk_init(); // emulated hard disk
     userinit();      // first user process
     __sync_synchronize();
-    print_ascii_art();
+    print_ascii_art(); // print ASCII art
     started = 1;
   } else {
     while(started == 0)

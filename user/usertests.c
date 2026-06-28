@@ -2344,7 +2344,6 @@ void
 fsfull()
 {
   int nfiles;
-  int fsblocks = 0;
 
   printf("fsfull test\n");
 
@@ -2368,7 +2367,6 @@ fsfull()
       if(cc < BSIZE)
         break;
       total += cc;
-      fsblocks++;
     }
     printf("wrote %d bytes\n", total);
     close(fd);

@@ -1,0 +1,18 @@
+CompileFlags:
+  Add:
+    - -I.
+    - -I..
+    - -Ikernel
+    - -I../kernel  # For files in user/ directory
+    - -Iuser
+    - -I../user     # For files in kernel/ directory
+    - -Wall
+    - -fno-common
+    - -Wno-main
+  Remove:
+    - -mcmodel=*
+    - -mno-relax
+    - -march=*
+
+Index:
+  StandardLibrary: No

@@ -5,6 +5,7 @@
 #include "spinlock.h"
 #include "proc.h"
 #include "defs.h"
+#include "pstat.h"
 
 struct cpu cpus[NCPU];
 
@@ -20,15 +21,72 @@ static void freeproc(struct proc *p);
 
 extern char trampoline[]; // trampoline.S
 
-// helps ensure that wakeups of wait()ing
+// Copilot Completion Guideline:
+// You should not modify most of functions unless it has syntax errors.
+
+// helps ensure that wakeups of waiting
 // parents are not lost. helps obey the
 // memory model when using p->parent.
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
+#define MAX_LOTTERY_TICKETS (0xffffffffU / NPROC)
+
+
+uint64
+sys_getpinfo(void) {
+  struct pstat pstat;
+  struct proc *p;
+  uint64 addr;
+
+  argaddr(0, &addr);
+  if (addr == 0) {
+    return -1;
+  }
+
+  int i = 0;
+  for(p = proc; p < &proc[NPROC]; p++) { // process table iter
+    acquire(&p->lock);
+    pstat.inuse[i] = (p->state != UNUSED);
+    pstat.lottery_tickets[i] = p->lottery_tickets;
+    pstat.pid[i] = p->pid;
+    pstat.times_executed[i] = p->times_executed;
+    release(&p->lock);
+    i++;
+  }
+
+  if (copyout(myproc()->pagetable, addr, (char *)&pstat, sizeof(pstat)) < 0) {
+    return -1;
+  }
+  
+  return 0;
+}
 
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
 // guard page.
+
+int
+settickets(int number) {
+  struct proc *p = myproc();
+  acquire(&p->lock);
+  if (number <= 0 || number > MAX_LOTTERY_TICKETS) {
+    release(&p->lock);
+    return -1;
+  }
+  p->lottery_tickets = number;
+  release(&p->lock);
+  return 0;
+}
+
+void
+sys_settickets(void) {
+  int number;
+  argint(0, &number);
+  if (settickets(number) < 0) {
+    printf("Error: Invalid number of tickets.\n");
+  }
+}
+
 void
 proc_mapstacks(pagetable_t kpgtbl)
 {
@@ -250,6 +308,7 @@ userinit(void)
   p->cwd = namei("/");
 
   p->state = RUNNABLE;
+  p->lottery_tickets = 10;
 
   release(&p->lock);
 }
@@ -320,6 +379,8 @@ fork(void)
 
   acquire(&np->lock);
   np->state = RUNNABLE;
+  np->lottery_tickets = p->lottery_tickets;
+  np->times_executed = 0;
   release(&np->lock);
 
   return pid;
@@ -434,6 +495,38 @@ wait(uint64 addr)
   }
 }
 
+static int
+init_random(void)
+{
+  struct cpu *c = mycpu();
+
+  // Initialize seed if not already done
+  if (c->rand_state == 0) {
+    c->rand_state = cpuid() * 1664525 + ticks + 1;
+  }
+  return 0;
+
+}
+
+
+static uint
+get_random(void)
+{
+  struct cpu *c = mycpu();
+  uint x;
+
+  c->rand_state += 0x9e3779b9U;
+  x = c->rand_state;
+
+  x ^= x >> 16;
+  x *= 0x7feb352dU;
+  x ^= x >> 15; 
+  x *= 0x846ca68bU;
+  x ^= x >> 16;
+
+  return x;
+}
+
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
 // Scheduler never returns.  It loops, doing:
@@ -441,44 +534,70 @@ wait(uint64 addr)
 //  - swtch to start running that process.
 //  - eventually that process transfers control
 //    via swtch back to the scheduler.
+
+// Copilot completion restriction:
+// This function should not be modified by Copilot. 
+
 void
 scheduler(void)
 {
   struct proc *p;
   struct cpu *c = mycpu();
+  struct proc *runnable_procs[NPROC];
 
   c->proc = 0;
+  init_random();
+  struct proc *w;
+  // give lottery scheduling a chance to run
+  // to each processors.
   for(;;){
-    // The most recent process to run may have had interrupts
-    // turned off; enable them to avoid a deadlock if all
-    // processes are waiting.
-    intr_on();
-
-    int found = 0;
-    for(p = proc; p < &proc[NPROC]; p++) {
+    intr_on(); // Enable interrupts to allow preemption
+    int total_running_procs = 0;
+    uint total_ticket_num;
+    total_ticket_num = 0;
+    uint cumsum;
+    cumsum = 0;
+    for(p = proc; p < &proc[NPROC]; p++) { // process table iter
       acquire(&p->lock);
-      if(p->state == RUNNABLE) {
-        // Switch to chosen process.  It is the process's job
-        // to release its lock and then reacquire it
-        // before jumping back to us.
-        p->state = RUNNING;
-        c->proc = p;
-        swtch(&c->context, &p->context);
-
-        // Process is done running for now.
-        // It should have changed its p->state before coming back.
-        c->proc = 0;
-        found = 1;
+      if (p->state == RUNNABLE) {
+        runnable_procs[total_running_procs] = p;
+        total_running_procs++;
+        total_ticket_num += p->lottery_tickets; // PR #3
       }
       release(&p->lock);
     }
-    if(found == 0) {
-      // nothing to run; stop running on this core until an interrupt.
+    if (total_running_procs == 0 || total_ticket_num == 0) {
       intr_on();
       asm volatile("wfi");
+      continue;
     }
+    uint winner_ticket;
+    winner_ticket = ((uint64)get_random() * total_ticket_num) >> 32;
+    w = 0;
+    for(int i = 0; i < total_running_procs; i++) {
+      cumsum += runnable_procs[i]->lottery_tickets;
+      if (winner_ticket < cumsum) {
+        w = runnable_procs[i];
+        break;
+      }
+    }
+    if (w == 0) {
+      continue; // TODO: convert to 2nd pass iteration
+    }
+    acquire(&w->lock);
+    if (w->state != RUNNABLE) {
+      release(&w->lock);
+      continue;
+    }
+    w->state = RUNNING;
+    c->proc = w;
+    swtch(&c->context, &w->context);
+    w->times_executed++;
+    c->proc = 0;
+    release(&w->lock);
   }
 }
+// end of copilot completion restriction
 
 // Switch to scheduler.  Must hold only p->lock
 // and have changed proc->state. Saves and restores

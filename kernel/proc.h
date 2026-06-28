@@ -24,6 +24,7 @@ struct cpu {
   struct context context;     // swtch() here to enter scheduler().
   int noff;                   // Depth of push_off() nesting.
   int intena;                 // Were interrupts enabled before push_off()?
+  unsigned int rand_state;    // Random state for lottery scheduling. seed is value for random function.
 };
 
 extern struct cpu cpus[NCPU];
@@ -104,4 +105,9 @@ struct proc {
   struct file *ofile[NOFILE];  // Open files
   struct inode *cwd;           // Current directory
   char name[16];               // Process name (debugging)
+  
+  // lottery tickets for lottery scheduling
+  int lottery_tickets;         // Number of tickets for lottery scheduling
+  unsigned int times_executed;
 };
+

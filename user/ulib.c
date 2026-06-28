@@ -145,3 +145,24 @@ memcpy(void *dst, const void *src, uint n)
 {
   return memmove(dst, src, n);
 }
+
+void 
+itoa(char *buf, uint n) 
+{
+  int i = 0;
+  if (n == 0) {
+    buf[i++] = '0';
+    buf[i] = '\0';
+    return;
+  }
+  char tmp[12];
+  while (n > 0) {
+    tmp[i++] = (n % 10) + '0';
+    n /= 10;
+  }
+  int j = 0;
+  while (i > 0) {
+    buf[j++] = tmp[--i];
+  }
+  buf[j] = '\0';
+}

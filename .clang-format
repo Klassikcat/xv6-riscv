@@ -1,0 +1,2 @@
+# Disable clang-format for xv6 project to preserve original kernel code style
+DisableFormat: true

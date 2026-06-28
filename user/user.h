@@ -1,4 +1,6 @@
 struct stat;
+int settickets(int);
+struct pstat;
 
 // system calls
 int fork(void);
@@ -23,6 +25,8 @@ char* sbrk(int);
 int sleep(int);
 int uptime(void);
 int getreadcount(void);
+int getpinfo(struct pstat *ps);
+int settickets(int number);
 
 // ulib.c
 int stat(const char*, struct stat*);
@@ -38,7 +42,9 @@ void* memset(void*, int, uint);
 int atoi(const char*);
 int memcmp(const void *, const void *, uint);
 void *memcpy(void *, const void *, uint);
+void itoa(char*, uint);
 
 // umalloc.c
 void* malloc(uint);
 void free(void*);
+
