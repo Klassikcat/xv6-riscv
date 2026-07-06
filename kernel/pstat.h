@@ -9,3 +9,4 @@ struct pstat {
   int pid[NPROC];     // the PID of each process 
   int times_executed[NPROC];
 };
+
