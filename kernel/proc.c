@@ -34,8 +34,6 @@ struct spinlock wait_lock;
 
 uint64
 sys_getpinfo(void) {
-  struct pstat pstat;
-  struct proc *p;
   uint64 addr;
 
   argaddr(0, &addr);
@@ -44,7 +42,8 @@ sys_getpinfo(void) {
   }
 
   int i = 0;
-  for(p = proc; p < &proc[NPROC]; p++) { // process table iter
+  struct pstat pstat;
+  for(struct proc *p = proc; p < &proc[NPROC]; p++) { // process table iter
     acquire(&p->lock);
     pstat.inuse[i] = (p->state != UNUSED);
     pstat.lottery_tickets[i] = p->lottery_tickets;
@@ -496,11 +495,24 @@ wait(uint64 addr)
 }
 
 static int
+mix32(uint x)
+{
+  x ^= x >> 16;
+  x *= 0x7feb352dU;
+  x ^= x >> 15; 
+  x *= 0x846ca68bU;
+  x ^= x >> 16;
+  return x;
+}
+
+
+static int
 init_random(void)
 {
   struct cpu *c = mycpu();
 
   // Initialize seed if not already done
+  // TODO: mix random state into mix32 
   if (c->rand_state == 0) {
     c->rand_state = cpuid() * 1664525 + ticks + 1;
   }
@@ -513,16 +525,10 @@ static uint
 get_random(void)
 {
   struct cpu *c = mycpu();
-  uint x;
 
   c->rand_state += 0x9e3779b9U;
-  x = c->rand_state;
-
-  x ^= x >> 16;
-  x *= 0x7feb352dU;
-  x ^= x >> 15; 
-  x *= 0x846ca68bU;
-  x ^= x >> 16;
+  uint x = c->rand_state;
+  x = mix32(x);
 
   return x;
 }
@@ -541,23 +547,18 @@ get_random(void)
 void
 scheduler(void)
 {
-  struct proc *p;
   struct cpu *c = mycpu();
-  struct proc *runnable_procs[NPROC];
-
   c->proc = 0;
   init_random();
-  struct proc *w;
   // give lottery scheduling a chance to run
   // to each processors.
+  struct proc *runnable_procs[NPROC];
   for(;;){
     intr_on(); // Enable interrupts to allow preemption
+    uint total_ticket_num = 0;
+    uint cumsum = 0;
     int total_running_procs = 0;
-    uint total_ticket_num;
-    total_ticket_num = 0;
-    uint cumsum;
-    cumsum = 0;
-    for(p = proc; p < &proc[NPROC]; p++) { // process table iter
+    for(struct proc *p = proc; p < &proc[NPROC]; p++) { // process table iter
       acquire(&p->lock);
       if (p->state == RUNNABLE) {
         runnable_procs[total_running_procs] = p;
@@ -571,9 +572,8 @@ scheduler(void)
       asm volatile("wfi");
       continue;
     }
-    uint winner_ticket;
-    winner_ticket = ((uint64)get_random() * total_ticket_num) >> 32;
-    w = 0;
+    uint winner_ticket = ((uint64)get_random() * total_ticket_num) >> 32;
+    struct proc *w = 0;
     for(int i = 0; i < total_running_procs; i++) {
       cumsum += runnable_procs[i]->lottery_tickets;
       if (winner_ticket < cumsum) {
